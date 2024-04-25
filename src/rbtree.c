@@ -70,26 +70,28 @@ void rotate_right(rbtree *t, node_t* y) {
   y->parent = x;
 }
 
-void rbtree_insert_fixup(rbtree* t, node_t* z) {
+void rbtree_insert_fixup(rbtree* t, node_t* z) {  // z : 삽입된 노드
   while(z->parent->color == 0) {                  // z의 색 : 빨강, 부모의 색 : 빨강 인 동안
-    if(z->parent == z->parent->parent->left) {
-      node_t* y = z->parent->parent->right;
-      if(y->color == 0) {                         // case 1
-        z->parent->color = 1;
-        y->color = 1;
-        z->parent->parent->color = 0;
-        z = z->parent->parent;
+    if(z->parent == z->parent->parent->left) {    // z의 부모가 할아버지의 왼쪽 자식일 때
+      node_t* y = z->parent->parent->right;       // y : z의 삼촌 노드
+      if(y->color == 0) {                         // case 1 : 삼촌 노드가 빨간색인 경우
+        z->parent->color = 1;                     // 부모를 black으로
+        y->color = 1;                             // 삼촌도 black으로
+        z->parent->parent->color = 0;             // 할아버지를 red로 바꾼 뒤
+        z = z->parent->parent;                    // 할아버지 단에서 해결하도록 넘김
       }
       else {
-        if(z == z->parent->right) {               // case 2
-          z = z->parent;
-          rotate_left(t, z);
+        if(z == z->parent->right) {               // case 2 : 삽입된 노드가 할아버지 => 부모 => 삽입된 노드로 일직선이 아니라 꺾여있는 경우
+          z = z->parent;                          // rotate와 balancing의 기준점을 부모로 바꾼 뒤
+          rotate_left(t, z);                      // 부모 기준으로 left rotate(일자로 펴주는 작업)
         }
-        z->parent->color = 1;                     // case 3
-        z->parent->parent->color = 0;
-        rotate_right(t, z->parent->parent);
+                                                  // case 3 : 삽입된 노드가 일직선으로 이어진 경우
+        z->parent->color = 1;                     // 부모의 색을 black으로
+        z->parent->parent->color = 0;             // 조부모의 색을 red로
+        rotate_right(t, z->parent->parent);       // 조부모를 기준으로 right rotate(5번 조건을 맞추기 위해 black으로 바꾼 부모를 위로 올림)
       }
     }
+    // 이하 동일(방향만 반대)
     else {
       node_t* y = z->parent->parent->left;
       if(y->color == 0) {                         // case 1
@@ -132,6 +134,7 @@ node_t *rbtree_insert(rbtree *t, const key_t key) {
       curNode = curNode->right;
     }
   }
+  // insertion
   newNode->parent = parNode;
   if(parNode == nil) {
     t->root = newNode;
@@ -187,7 +190,7 @@ node_t *rbtree_max(const rbtree *t) {
   return curNode;
 }
 
-void transplant(rbtree* t, node_t* u, node_t* v) {
+void transplant(rbtree* t, node_t* u, node_t* v) {                  // u의 부모와 v를 이어주는 과정(삭제할 때 대체하는 노드를 올리는 작업)
   if(u->parent == t->nil) {
     t->root = v;
   }
@@ -201,33 +204,34 @@ void transplant(rbtree* t, node_t* u, node_t* v) {
 }
 
 void rbtree_delete_fixup(rbtree* t, node_t* x) {
-  while(x != t->root && x->color == 1) {
-    if(x == x->parent->left) {
-      node_t* w = x->parent->right;
-      if(w->color == 0) {                         // Case 1
-        w->color = 1;
-        x->parent->color = 0;
-        rotate_left(t, x->parent);
-        w = x->parent->right;
+  while(x != t->root && x->color == 1) {          // 삭제된 자리가 root가 아니고 블랙인 경우에만(삭제된 색이 red면 그대로 삭제하고 끝)
+    if(x == x->parent->left) {                    // 삭제된 자리가 부모의 왼쪽에 위치할 때
+      node_t* w = x->parent->right;               // w : 삭제된 자리의 형제 노드
+      if(w->color == 0) {                         // Case 1 : 형제가 red일 때
+        w->color = 1;                             // 형제의 색을 black으로
+        x->parent->color = 0;                     // 부모의 색을 red로
+        rotate_left(t, x->parent);                // 부모를 기준으로 left rotate하여 doubly black의 형제를 black으로 만들어 case 2, 3, 4중 하나로 만듦
+        w = x->parent->right;                     // rotate후 바뀐 black이 된 형제를 다시 가리킴
       }
-      if(w->left->color == 1 && w->right->color == 1) {   // Case 2
-        w->color = 0;
-        x = x->parent;
+      if(w->left->color == 1 && w->right->color == 1) {   // Case 2 : 형제의 색이 black이고 형제의 양 자식의 색이 black일 때
+        w->color = 0;                                     // 형제의 색을 red로 만들어 doubly black을 부모에게 올림
+        x = x->parent;                                    // case를 부모로 옮김
       }
       else {
-        if(w->right->color == 1) {                  // Case 3
-          w->left->color = 1;
-          w->color = 0;
-          rotate_right(t, w);
-          w = x->parent->right;
+        if(w->right->color == 1) {                  // Case 3 : doubly black의 형제가 black, doubly black과 가까운 조카 노드(반대 방향 자식이 아님)가 red인 경우
+          w->left->color = 1;                       // 해당 조카 노드의 색을 black으로
+          w->color = 0;                             // 형제 노드의 색을 red로
+          rotate_right(t, w);                       // 형제 노드를 기준으로 right rotate하여 case 4로 만듦
+          w = x->parent->right;                     // 형제 노드 갱신
         }
-        w->color = x->parent->color;                // Case 4
-        x->parent->color = 1;
-        w->right->color = 1;
-        rotate_left(t, x->parent);
-        x = t->root;
+        w->color = x->parent->color;                // Case 4 : doubly black의 형제가 black, doubly black과 먼 쪽의 조카(정방향 자식)가 red인 경우
+        x->parent->color = 1;                       // 부모의 색을 black으로
+        w->right->color = 1;                        // 형제의 오른쪽 자식을 black으로
+        rotate_left(t, x->parent);                  // 부모를 기준으로 left rotate하여 red가 doubly black 위로 오게 만든 뒤, red를 black으로 만드는 과정이 위 포함임
+        x = t->root;                                // delete rebalancing 기준을 root로 바꿈(while문 탈출 조건 성립)
       }
     }
+    // 이하 위와 동일(방향만 반대)
     else {
       node_t* w = x->parent->left;
       if(w->color == 0) {                         // Case 1
@@ -278,7 +282,7 @@ int rbtree_erase(rbtree *t, node_t *p) {
     y_origin_color = y->color;
     x = y->right;
     if(y->parent == p) {                  // predecessor가 삭제하려는 노드의 자식인 경우
-      x->parent = y;
+      x->parent = y;                      // x가 nil인 경우 delete_fixup에서 부모를 설정 안하면 segmentation fault가 일어남(x의 부모를 참조하는 경우 초기화 안하면 NULL을 참조)
     }
     else {                                // predecessor가 삭제하려는 노드와 떨어져있는 경우
       transplant(t, y, y->right);         // predecessor의 부모와 그의 자식을 연결
@@ -291,7 +295,7 @@ int rbtree_erase(rbtree *t, node_t *p) {
     y->color = p->color;                  // color도 삭제하려는 노드의 색으로
   }
   if(y_origin_color == 1) {               // 삭제되는 색이 BLACK인 경우 rebalancing이 필요함
-    rbtree_delete_fixup(t, x);
+    rbtree_delete_fixup(t, x);            // delete rebalancing
   }
   free(p);
   return 0;
@@ -310,7 +314,7 @@ void fillarr(node_t* nil, node_t* cur, key_t *arr, int* filled, const size_t n) 
 }
 
 int rbtree_to_array(const rbtree *t, key_t *arr, const size_t n) {
-  int filled = 0;
+  int filled = 0;                           // 현재까지 arr에 들어간 원소의 개수
   fillarr(t->nil, t->root, arr, &filled, n);
   return 0;
 }
